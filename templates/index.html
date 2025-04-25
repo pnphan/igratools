@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>IGRA PyTools - Station Data Explorer</title>
+  
+  <!-- 1) Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""/>
+  
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .map-status-container {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+      gap: 30px;
+    }
+    
+    /* 2) Map needs a visible size */
+    #map {
+      height: 750px;
+      width: 650px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .export-button {
+      margin-top: 5px;
+      padding: 5px 10px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    
+    .export-button:hover {
+      background-color: #45a049;
+    }
+    
+    #status-container {
+      width: 500px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      min-height: 200px;
+      background-color: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      overflow-y: auto;
+      max-height: 750px;
+    }
+    
+    .success-message {
+      color: #4CAF50;
+      padding: 10px;
+      background-color: #f0f8f0;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    
+    .error-message {
+      color: #f44336;
+      padding: 10px;
+      background-color: #f8f0f0;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    
+    h2 {
+      margin-top: 0;
+      color: #333;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+
+    /* Batch export styles */
+    .batch-export-container {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f0f7ff;
+      border-radius: 4px;
+      border-left: 4px solid #2196F3;
+    }
+    
+    .batch-export-container h3 {
+      margin-top: 0;
+      color: #2196F3;
+    }
+    
+    .station-list {
+      max-height: 200px;
+      overflow-y: auto;
+      margin: 10px 0;
+      padding: 10px;
+      background-color: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    .station-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .station-list-item:last-child {
+      border-bottom: none;
+    }
+    
+    .remove-station {
+      color: #f44336;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    
+    .batch-buttons {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .batch-button {
+      padding: 8px 15px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .batch-button:hover {
+      background-color: #0b7dda;
+    }
+    
+    .batch-button.export {
+      background-color: #4CAF50;
+    }
+    
+    .batch-button.export:hover {
+      background-color: #45a049;
+    }
+    
+    .batch-button.clear {
+      background-color: #f44336;
+    }
+    
+    .batch-button.clear:hover {
+      background-color: #d32f2f;
+    }
+    
+    .station-info {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      border-left: 4px solid #2196F3;
+    }
+    
+    .station-info h3 {
+      margin-top: 0;
+      color: #2196F3;
+    }
+    
+    .station-info p {
+      margin: 5px 0;
+    }
+    
+    .calendar-container {
+      margin-top: 20px;
+    }
+    
+    .calendar-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .calendar-control-button {
+      padding: 5px 10px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    .calendar-control-button:hover {
+      background-color: #0b7dda;
+    }
+    
+    .calendar-year {
+      margin-bottom: 15px;
+    }
+    
+    .calendar-year-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+      cursor: pointer;
+      background-color: #f0f0f0;
+      padding: 5px 10px;
+      border-radius: 4px;
+    }
+    
+    .calendar-months {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+      padding-left: 15px;
+    }
+    
+    .calendar-month {
+      margin-bottom: 10px;
+    }
+    
+    .calendar-month-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #555;
+      cursor: pointer;
+    }
+    
+    .calendar-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+      margin-top: 5px;
+    }
+    
+    .calendar-day {
+      width: 25px;
+      height: 25px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    
+    .calendar-day.has-data {
+      background-color: #4CAF50;
+      color: white;
+    }
+    
+    .calendar-day-header {
+      width: 25px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: bold;
+      color: #777;
+    }
+    
+    .hidden {
+      display: none;
+    }
+    
+    
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="text-align: center; margin-bottom: 30px; color: #333;">IGRA PyTools - Station Data Explorer</h1>
+    
+    <div class="map-status-container">
+      <!-- 3) Map container -->
+      <div id="map"></div>
+      
+      <!-- Status container -->
+      <div id="status-container">
+        <h2>Status</h2>
+        <div id="status-messages"></div>
+        <div id="batch-export" class="batch-export-container">
+          <h3>Batch Export</h3>
+          <div id="station-list" class="station-list">
+            <div class="empty-list-message">No stations selected. Add stations from the map.</div>
+          </div>
+          <div class="batch-buttons">
+            <button id="batch-export-netcdf" class="batch-button export">Export All NetCDF</button>
+            <button id="batch-export-netcdf-main" class="batch-button export">Export All NetCDF Main</button>
+            <button id="clear-station-list" class="batch-button clear">Clear List</button>
+          </div>
+        </div>
+        <div id="station-details"></div>
+        <div id="availability-calendar" class="calendar-container"></div>
+
+        
+        <!-- Batch export container -->
+        
+      </div>
+    </div>
+  </div>
+  
+  <!-- 4) Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""></script>
+  
+  <!-- 5) Our script -->
+  <script>
+    // Initialize map
+    const map = L.map('map').setView([0, 0], 2);
+    
+    // Add a tile layer (OpenStreetMap in this case)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+    
+    // Get the stations data from Flask
+    const stations = JSON.parse('{{ stations | tojson | safe }}');
+    
+    // Create a layer group to manage markers
+    const markersLayer = L.layerGroup().addTo(map);
+    
+    // Minimum zoom level at which to show markers
+    const MIN_ZOOM_FOR_MARKERS = 5;
+    
+    // Month names for calendar
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    
+    // Day names for calendar headers
+    const dayNames = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+    
+    // Store selected stations for batch export
+    let selectedStations = [];
+    
+    // Function to update visible markers based on current view
+    function updateMarkers() {
+      // Clear existing markers
+      markersLayer.clearLayers();
+      
+      // Only show markers if zoomed in enough
+      if (map.getZoom() < MIN_ZOOM_FOR_MARKERS) {
+        return;
+      }
+      
+      // Get current map bounds
+      const bounds = map.getBounds();
+      
+      // Filter stations to only those in the current view
+      const visibleStations = stations.filter(station => {
+        return bounds.contains([station.lat, station.lon]);
+      });
+      
+      // Add markers for visible stations
+      visibleStations.forEach(station => {
+        const marker = L.marker([station.lat, station.lon]);
+        
+        // Create popup content with export button
+        const popupContent = `
+          <strong>Station:</strong> ${station.id}<br>
+          <strong>Name:</strong> ${station.name}<br>
+          <button onclick="showStationInfo('${station.id}')" class="export-button">View Details</button>
+          <button onclick="downloadNetCDF('${station.id}')" class="export-button">Export NetCDF</button>
+          <button onclick="downloadNetCDFmain('${station.id}')" class="export-button">Export NetCDF Main</button>
+          <button onclick="addToBatchExport('${station.id}', '${station.name}')" class="export-button">Add to Batch</button>
+        `;
+        
+        marker.bindPopup(popupContent);
+        markersLayer.addLayer(marker);
+      });
+    }
+    
+    function clearPreviousStationData() {
+      // Clear all previous station information and status messages
+      document.getElementById('status-messages').innerHTML = '';
+      document.getElementById('station-details').innerHTML = '';
+      document.getElementById('availability-calendar').innerHTML = '';
+    }
+    
+    function showStationInfo(stationId) {
+      // Clear previous station data
+      clearPreviousStationData();
+      
+      // Show loading message
+      const stationDetailsContainer = document.getElementById('station-details');
+      stationDetailsContainer.innerHTML = `<div>Loading station information...</div>`;
+      
+      // Make AJAX request to get the station information
+      fetch(`station_info/${stationId}`)
+        .then(response => response.json())
+        .then(data => {
+          // Display the station information
+          stationDetailsContainer.innerHTML = `
+            <div class="station-info">
+              <h3>Station Details</h3>
+              <p><strong>ID:</strong> ${data.id}</p>
+              <p><strong>Name:</strong> ${data.name}</p>
+              <p><strong>Latitude:</strong> ${data.lat}</p>
+              <p><strong>Longitude:</strong> ${data.lon}</p>
+              ${data.elevation ? `<p><strong>Elevation:</strong> ${data.elevation} m</p>` : ''}
+              ${data.country ? `<p><strong>Country:</strong> ${data.country}</p>` : ''}
+              ${data.state ? `<p><strong>State/Province:</strong> ${data.state}</p>` : ''}
+              <button onclick="addToBatchExport('${data.id}', '${data.name}')" class="export-button">Add to Batch Export</button>
+            </div>
+          `;
+          
+          // Now fetch the availability data
+          fetchAvailabilityData(stationId);
+        })
+        .catch(error => {
+          // Handle any errors
+          stationDetailsContainer.innerHTML = `
+            <div class="error-message">
+              <strong>Error:</strong> Failed to load station information.<br>
+              <strong>Details:</strong> ${error.message}
+            </div>
+          `;
+        });
+    }
+    
+    function fetchAvailabilityData(stationId) {
+      const calendarContainer = document.getElementById('availability-calendar');
+      calendarContainer.innerHTML = '<div>Loading availability data...</div>';
+      
+      fetch(`availability/${stationId}`)
+        .then(response => response.json())
+        .then(availabilityData => {
+          // Convert the list of lists to a structured object for the calendar
+          const availability = processAvailabilityData(availabilityData);
+          renderAvailabilityCalendar(availability);
+        })
+        .catch(error => {
+          calendarContainer.innerHTML = `
+            <div class="error-message">
+              <strong>Error:</strong> Failed to load availability data.<br>
+              <strong>Details:</strong> ${error.message}
+            </div>
+          `;
+        });
+    }
+    
+    function processAvailabilityData(availabilityData) {
+      // Convert the list of lists [[year, month, day, time], ...] to a structured object
+      const availability = {};
+      
+      availabilityData.forEach(item => {
+        const [year, month, day, time] = item;
+        
+        // Create year object if it doesn't exist
+        if (!availability[year]) {
+          availability[year] = {};
+        }
+        
+        // Create month object if it doesn't exist
+        if (!availability[year][month]) {
+          availability[year][month] = {};
+        }
+        
+        // Create day object if it doesn't exist
+        if (!availability[year][month][day]) {
+          availability[year][month][day] = {};
+        }
+        
+        // Add time to the day
+        availability[year][month][day][time] = true;
+      });
+      
+      return availability;
+    }
+    
+    function expandAllCalendar() {
+      const yearDivs = document.querySelectorAll('.calendar-year');
+      yearDivs.forEach(yearDiv => {
+        const monthsDiv = yearDiv.querySelector('.calendar-months');
+        monthsDiv.classList.remove('hidden');
+        
+        const monthDivs = monthsDiv.querySelectorAll('.calendar-month');
+        monthDivs.forEach(monthDiv => {
+          const daysDiv = monthDiv.querySelector('.calendar-days-container');
+          daysDiv.classList.remove('hidden');
+        });
+      });
+    }
+    
+    function collapseAllCalendar() {
+      const yearDivs = document.querySelectorAll('.calendar-year');
+      yearDivs.forEach(yearDiv => {
+        const monthsDiv = yearDiv.querySelector('.calendar-months');
+        monthsDiv.classList.add('hidden');
+        
+        const monthDivs = monthsDiv.querySelectorAll('.calendar-month');
+        monthDivs.forEach(monthDiv => {
+          const daysDiv = monthDiv.querySelector('.calendar-days-container');
+          daysDiv.classList.add('hidden');
+        });
+      });
+    }
+    
+    function renderAvailabilityCalendar(availability) {
+      const calendarContainer = document.getElementById('availability-calendar');
+      calendarContainer.innerHTML = '<h3>Data Availability</h3>';
+      
+      // Add expand/collapse controls
+      const controlsDiv = document.createElement('div');
+      controlsDiv.className = 'calendar-controls';
+      
+      const expandButton = document.createElement('button');
+      expandButton.className = 'calendar-control-button';
+      expandButton.textContent = 'Expand All';
+      expandButton.onclick = expandAllCalendar;
+      controlsDiv.appendChild(expandButton);
+      
+      const collapseButton = document.createElement('button');
+      collapseButton.className = 'calendar-control-button';
+      collapseButton.textContent = 'Collapse All';
+      collapseButton.onclick = collapseAllCalendar;
+      controlsDiv.appendChild(collapseButton);
+      
+      calendarContainer.appendChild(controlsDiv);
+      
+      // Sort years in descending order
+      const years = Object.keys(availability).sort((a, b) => b - a);
+      
+      if (years.length === 0) {
+        calendarContainer.innerHTML += '<p>No data available for this station.</p>';
+        return;
+      }
+      
+      years.forEach(year => {
+        const yearDiv = document.createElement('div');
+        yearDiv.className = 'calendar-year';
+        
+        const yearTitle = document.createElement('div');
+        yearTitle.className = 'calendar-year-title';
+        yearTitle.textContent = year;
+        yearTitle.onclick = () => {
+          const monthsDiv = yearDiv.querySelector('.calendar-months');
+          monthsDiv.classList.toggle('hidden');
+        };
+        yearDiv.appendChild(yearTitle);
+        
+        const monthsDiv = document.createElement('div');
+        monthsDiv.className = 'calendar-months hidden';
+        yearDiv.appendChild(monthsDiv);
+        
+        // Sort months in ascending order
+        const months = Object.keys(availability[year]).sort((a, b) => a - b);
+        
+        months.forEach(month => {
+          const monthDiv = document.createElement('div');
+          monthDiv.className = 'calendar-month';
+          
+          const monthTitle = document.createElement('div');
+          monthTitle.className = 'calendar-month-title';
+          monthTitle.textContent = monthNames[parseInt(month) - 1];
+          monthTitle.onclick = () => {
+            const daysDiv = monthDiv.querySelector('.calendar-days-container');
+            daysDiv.classList.toggle('hidden');
+          };
+          monthDiv.appendChild(monthTitle);
+          
+          const daysContainerDiv = document.createElement('div');
+          daysContainerDiv.className = 'calendar-days-container hidden';
+          monthDiv.appendChild(daysContainerDiv);
+          
+          // Add day headers
+          const dayHeadersDiv = document.createElement('div');
+          dayHeadersDiv.className = 'calendar-days';
+          daysContainerDiv.appendChild(dayHeadersDiv);
+          
+          dayNames.forEach(day => {
+            const dayHeader = document.createElement('div');
+            dayHeader.className = 'calendar-day-header';
+            dayHeader.textContent = day;
+            dayHeadersDiv.appendChild(dayHeader);
+          });
+          
+          // Create the calendar grid
+          const daysDiv = document.createElement('div');
+          daysDiv.className = 'calendar-days';
+          daysContainerDiv.appendChild(daysDiv);
+          
+          // Calculate first day of month
+          const firstDay = new Date(year, month - 1, 1).getDay();
+          
+          // Add empty cells for days before the 1st
+          for (let i = 0; i < firstDay; i++) {
+            const emptyDay = document.createElement('div');
+            emptyDay.className = 'calendar-day';
+            daysDiv.appendChild(emptyDay);
+          }
+          
+          // Get the number of days in the month
+          const daysInMonth = new Date(year, month, 0).getDate();
+          
+          // Add days of the month
+          for (let day = 1; day <= daysInMonth; day++) {
+            const dayDiv = document.createElement('div');
+            dayDiv.className = 'calendar-day';
+            dayDiv.textContent = day;
+            
+            // Check if this day has data
+            if (availability[year][month] && availability[year][month][day]) {
+              dayDiv.classList.add('has-data');
+              
+              // Add tooltip with hours
+              const hours = Object.keys(availability[year][month][day]).sort();
+              const hoursText = hours.join(', ');
+              dayDiv.title = `Soundings at: ${hoursText} UTC`;
+            }
+            
+            daysDiv.appendChild(dayDiv);
+          }
+          
+          monthsDiv.appendChild(monthDiv);
+        });
+        
+        calendarContainer.appendChild(yearDiv);
+      });
+      
+      // Expand the most recent year by default
+      if (years.length > 0) {
+        const mostRecentYear = calendarContainer.querySelector('.calendar-year');
+        const monthsDiv = mostRecentYear.querySelector('.calendar-months');
+        monthsDiv.classList.remove('hidden');
+      }
+    }
+    
+    function downloadNetCDF(stationId) {
+      // Clear previous station data
+      clearPreviousStationData();
+      
+      // Show loading message
+      const statusContainer = document.getElementById('status-messages');
+      statusContainer.innerHTML = `<div>Processing request for station ${stationId}...</div>`;
+      
+      // Make AJAX request to get the JSON response
+      fetch(`export/${stationId}`)
+        .then(response => response.json())
+        .then(data => {
+          // Display the status and message
+          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
+          statusContainer.innerHTML = `
+            <div class="${messageClass}">
+              <strong>Status:</strong> ${data.status}<br>
+              <strong>Message:</strong> ${data.message}
+            </div>
+          `;
+        })
+        .catch(error => {
+          // Handle any errors
+          statusContainer.innerHTML = `
+            <div class="error-message">
+              <strong>Error:</strong> Failed to process request.<br>
+              <strong>Details:</strong> ${error.message}
+            </div>
+          `;
+        });
+    }
+
+    function downloadNetCDFmain(stationId) {
+      // Clear previous station data
+      clearPreviousStationData();
+      
+      // Show loading message
+      const statusContainer = document.getElementById('status-messages');
+      statusContainer.innerHTML = `<div>Processing request for station ${stationId}...</div>`;
+      
+      // Make AJAX request to get the JSON response
+      fetch(`export_main/${stationId}`)
+        .then(response => response.json())
+        .then(data => {
+          // Display the status and message
+          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
+          statusContainer.innerHTML = `
+            <div class="${messageClass}">
+              <strong>Status:</strong> ${data.status}<br>
+              <strong>Message:</strong> ${data.message}
+            </div>
+          `;
+        })
+        .catch(error => {
+          // Handle any errors
+          statusContainer.innerHTML = `
+            <div class="error-message">
+              <strong>Error:</strong> Failed to process request.<br>
+              <strong>Details:</strong> ${error.message}
+            </div>
+          `;
+        });
+    }
+    
+    // Batch export functions
+    function addToBatchExport(stationId, stationName) {
+      // Check if station is already in the list
+      if (!selectedStations.some(station => station.id === stationId)) {
+        // Add to the list
+        selectedStations.push({
+          id: stationId,
+          name: stationName
+        });
+        
+        // Update the UI
+        updateStationList();
+        
+        // Show success message
+        const statusContainer = document.getElementById('status-messages');
+        statusContainer.innerHTML = `
+          <div class="success-message">
+            <strong>Added:</strong> Station ${stationId} (${stationName}) added to batch export list.
+          </div>
+        `;
+      } else {
+        // Show already added message
+        const statusContainer = document.getElementById('status-messages');
+        statusContainer.innerHTML = `
+          <div class="error-message">
+            <strong>Note:</strong> Station ${stationId} is already in the batch export list.
+          </div>
+        `;
+      }
+    }
+    
+    function removeFromBatchExport(stationId) {
+      // Remove from the list
+      selectedStations = selectedStations.filter(station => station.id !== stationId);
+      
+      // Update the UI
+      updateStationList();
+      
+      // Show success message
+      const statusContainer = document.getElementById('status-messages');
+      statusContainer.innerHTML = `
+        <div class="success-message">
+          <strong>Removed:</strong> Station ${stationId} removed from batch export list.
+        </div>
+      `;
+    }
+    
+    function updateStationList() {
+      const stationListContainer = document.getElementById('station-list');
+      
+      if (selectedStations.length === 0) {
+        stationListContainer.innerHTML = `<div class="empty-list-message">No stations selected. Add stations from the map.</div>`;
+        return;
+      }
+      
+      let html = '';
+      selectedStations.forEach(station => {
+        html += `
+          <div class="station-list-item">
+            <span>${station.id} - ${station.name}</span>
+            <span class="remove-station" onclick="removeFromBatchExport('${station.id}')">✕</span>
+          </div>
+        `;
+      });
+      
+      stationListContainer.innerHTML = html;
+    }
+    
+    function clearStationList() {
+      selectedStations = [];
+      updateStationList();
+      
+      // Show success message
+      const statusContainer = document.getElementById('status-messages');
+      statusContainer.innerHTML = `
+        <div class="success-message">
+          <strong>Cleared:</strong> Batch export list has been cleared.
+        </div>
+      `;
+    }
+    
+    function batchExportNetCDF() {
+      if (selectedStations.length === 0) {
+        const statusContainer = document.getElementById('status-messages');
+        statusContainer.innerHTML = `
+          <div class="error-message">
+            <strong>Error:</strong> No stations selected for batch export.
+          </div>
+        `;
+        return;
+      }
+      
+      // Clear previous station data
+      clearPreviousStationData();
+      
+      // Show loading message
+      const statusContainer = document.getElementById('status-messages');
+      statusContainer.innerHTML = `<div>Processing batch export for ${selectedStations.length} stations...</div>`;
+      
+      let results = [];
+      
+      // Process each station sequentially
+      for (let i = 0; i < selectedStations.length; i++) {
+        const station = selectedStations[i];
+        
+        statusContainer.innerHTML += `<div>Processing station ${i+1}/${selectedStations.length}: ${station.id} (${station.name})...</div>`;
+        
+        fetch(`export/${station.id}`)
+        .then(response => response.json())
+        .then(data => {
+          // Display the status and message
+          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
+          statusContainer.innerHTML = `
+            <div class="${messageClass}">
+              <strong>Status:</strong> ${data.status}<br>
+              <strong>Message:</strong> ${data.message}
+            </div>
+          `;
+        })
+        .catch(error => {
+          // Handle any errors
+          statusContainer.innerHTML = `
+            <div class="error-message">
+              <strong>Error:</strong> Failed to process request.<br>
+              <strong>Details:</strong> ${error.message}
+            </div>
+          `;
+        });
+      }
+      
+      // Display results
+      let resultsHtml = '<div><strong>Batch Export Results:</strong></div>';
+      results.forEach(result => {
+        const messageClass = result.status === 'success' ? 'success-message' : 'error-message';
+        resultsHtml += `
+          <div class="${messageClass}">
+            <strong>${result.id} (${result.name}):</strong> ${result.message}
+          </div>
+        `;
+      });
+      
+      statusContainer.innerHTML = resultsHtml;
+    }
+    
+    function batchExportNetCDFMain() {
+      if (selectedStations.length === 0) {
+        const statusContainer = document.getElementById('status-messages');
+        statusContainer.innerHTML = `
+          <div class="error-message">
+            <strong>Error:</strong> No stations selected for batch export.
+          </div>
+        `;
+        return;
+      }
+      
+      // Clear previous station data
+      clearPreviousStationData();
+      
+      // Show loading message
+      const statusContainer = document.getElementById('status-messages');
+      statusContainer.innerHTML = `<div>Processing batch export (main) for ${selectedStations.length} stations...</div>`;
+      
+      let results = [];
+      
+      // Process each station sequentially
+      for (let i = 0; i < selectedStations.length; i++) {
+        const station = selectedStations[i];
+        
+        statusContainer.innerHTML += `<div>Processing station ${i+1}/${selectedStations.length}: ${station.id} (${station.name})...</div>`;
+        
+        fetch(`export_main/${station.id}`)
+        .then(response => response.json())
+        .then(data => {
+          // Display the status and message
+          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
+          statusContainer.innerHTML = `
+            <div class="${messageClass}">
+              <strong>Status:</strong> ${data.status}<br>
+              <strong>Message:</strong> ${data.message}
+            </div>
+          `;
+        })
+        .catch(error => {
+          // Handle any errors
+          statusContainer.innerHTML = `
+            <div class="error-message">
+              <strong>Error:</strong> Failed to process request.<br>
+              <strong>Details:</strong> ${error.message}
+            </div>
+          `;
+        });
+      }
+      
+      // Display results
+      let resultsHtml = '<div><strong>Batch Export Results (Main):</strong></div>';
+      results.forEach(result => {
+        const messageClass = result.status === 'success' ? 'success-message' : 'error-message';
+        resultsHtml += `
+          <div class="${messageClass}">
+            <strong>${result.id} (${result.name}):</strong> ${result.message}
+          </div>
+        `;
+      });
+      
+      // Display results
+      statusContainer.innerHTML = resultsHtml;
+    }
+    
+    // Update markers when map is moved or zoomed
+    map.on('moveend', updateMarkers);
+    map.on('zoomend', updateMarkers);
+    
+    // Initial update
+    updateMarkers();
+    
+    // Add event listeners after the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      // Connect the batch export buttons to their functions
+      const batchExportNetCDFBtn = document.getElementById('batch-export-netcdf');
+      if (batchExportNetCDFBtn) {
+        batchExportNetCDFBtn.addEventListener('click', function() {
+          console.log('Export All NetCDF button clicked');
+          batchExportNetCDF();
+        });
+      }
+      
+      const batchExportNetCDFMainBtn = document.getElementById('batch-export-netcdf-main');
+      if (batchExportNetCDFMainBtn) {
+        batchExportNetCDFMainBtn.addEventListener('click', function() {
+          console.log('Export All NetCDF Main button clicked');
+          batchExportNetCDFMain();
+        });
+      }
+      
+      const clearStationListBtn = document.getElementById('clear-station-list');
+      if (clearStationListBtn) {
+        clearStationListBtn.addEventListener('click', function() {
+          console.log('Clear List button clicked');
+          clearStationList();
+        });
+      }
+    });
+  </script>
