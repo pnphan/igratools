@@ -9,14 +9,16 @@ import io
 import shutil
 import argparse
 
+
 def netcdf(station_list, download=True, download_dir=None, main=False):
     """
     Create a NetCDF file from IGRA data for a given station.
     
     Parameters:
     -----------
-    station_list : list of str
+    station_list : list of str or str
         A list of IGRA station identifiers (e.g., ['USM00072401', 'USM00072421'])
+        or a path to a text file containing station identifiers (one per line)
     download : bool, optional
         If True, the IGRA data files will be downloaded. If False, the IGRA data files will not be downloaded.
     download_dir : str, optional
@@ -27,6 +29,13 @@ def netcdf(station_list, download=True, download_dir=None, main=False):
     str
         Path to the created NetCDF file, or None if an error occurred
     """
+    # Check if station_list is a file path
+    if isinstance(station_list, str) and os.path.isfile(station_list) and station_list.endswith('.txt'):
+        with open(station_list, 'r') as f:
+            station_list = [line.strip() for line in f if line.strip()]
+    elif isinstance(station_list, str):
+        station_list = [station_list]
+    
     for station_name in station_list:
         try:
                         
@@ -407,21 +416,31 @@ def netcdf(station_list, download=True, download_dir=None, main=False):
 
 def main():
     parser = argparse.ArgumentParser(description='Create NetCDF files from IGRA data for specified stations.')
-    parser.add_argument('stations', nargs='+', help='IGRA station identifiers (e.g., USM00072401 USM00072421)')
+    parser.add_argument('stations', nargs='+', help='IGRA station identifiers (e.g., USM00072401 USM00072421) or path to a .txt file with station IDs')
     parser.add_argument('--nd', dest='download', action='store_false', 
                         help='Do not download IGRA data files (use existing files)')
     parser.add_argument('--dir', dest='download_dir', type=str, default=None,
                         help='Directory to save IGRA data files (default: current date)')
     parser.add_argument('--main', dest='main', action='store_true', 
                         help='Store main variables only (pressure, gph, temp, rh, wdir, wspd, dpdp)')
+    parser.add_argument('--file', dest='station_file', action='store_true',
+                        help='Treat the first argument as a file containing station IDs (one per line)')
     
     args = parser.parse_args()
     
+    # Process stations argument
+    stations = args.stations
+    if args.station_file and len(stations) == 1:
+        # Use the first argument as a file path
+        stations = stations[0]
+    elif len(stations) == 1 and stations[0].endswith('.txt') and os.path.isfile(stations[0]):
+        # Auto-detect if the argument is a file
+        stations = stations[0]
+    
     # Call the netcdf function with the parsed arguments
-    netcdf(args.stations, download=args.download, download_dir=args.download_dir, main=args.main)
+    netcdf(stations, download=args.download, download_dir=args.download_dir, main=args.main)
 
 
 if __name__ == "__main__":
     main()
-
 
