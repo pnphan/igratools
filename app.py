@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, send_file
+from flask import Flask, render_template, jsonify, send_file, request
 import os
 from datetime import datetime
 import numpy as np
@@ -64,18 +64,6 @@ def get_availability(station_id, download=True, download_dir=None):
     """
     availability = []
     try:
-                    
-        if download_dir is None:
-            download_dir = os.path.join(os.getcwd(), str(datetime.now().strftime("%Y-%m-%d")))
-
-        # Create the directory if it doesn't exist
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-
-        # Create the NetCDF file
-        output_file = os.path.join(download_dir, f"{station_id}.nc")
-
-
         if download:
             base_url = "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-por/"
 
@@ -92,8 +80,8 @@ def get_availability(station_id, download=True, download_dir=None):
                 # Create a BytesIO object to hold the zip file in memory
                 zip_buffer = io.BytesIO(response.content)
                 
-                # Extract only the text file directly from memory to disk
-                print(f"Extracting data for station {station_id}...")
+                # Extract and process the text file directly from memory
+                print(f"Processing data for station {station_id}...")
                 with zipfile.ZipFile(zip_buffer) as zip_ref:
                     # Get the name of the text file in the zip
                     txt_file_name = None
@@ -103,13 +91,21 @@ def get_availability(station_id, download=True, download_dir=None):
                             break
                     
                     if txt_file_name:
-                        # Extract only the text file
-                        with zip_ref.open(txt_file_name) as source, open(os.path.join(download_dir, f"{station_id}-data.txt"), 'wb') as target:
-                            shutil.copyfileobj(source, target)
+                        # Read the text file directly from the zip archive
+                        with zip_ref.open(txt_file_name) as file:
+                            # Decode bytes to string and process line by line
+                            for line in io.TextIOWrapper(file, encoding='utf-8'):
+                                line = line.strip()
+                                if line.startswith('#'):
+                                    year = int(line[13:17])
+                                    month = int(line[18:20])
+                                    day = int(line[21:23])
+                                    hour = int(line[24:26])
+                                    availability.append([year, month, day, hour])
                     else:
                         raise Exception("No text file found in the zip archive")
                 
-                print(f"Successfully downloaded and extracted data for {station_id} to {download_dir}")
+                print(f"Successfully processed data for {station_id}")
             
             except requests.exceptions.RequestException as e:
                 print(f"Error downloading data for station {station_id}: {e}")
@@ -120,27 +116,29 @@ def get_availability(station_id, download=True, download_dir=None):
             except Exception as e:
                 print(f"Unexpected error processing data for {station_id}: {e}")
                 return None
+        else:
+            # If download is False, we still need the download_dir to exist and contain the data file
+            if download_dir is None:
+                download_dir = os.path.join(os.getcwd(), str(datetime.now().strftime("%Y-%m-%d")))
 
-        data_file = os.path.join(download_dir, f"{station_id}-data.txt")
+            data_file = os.path.join(download_dir, f"{station_id}-data.txt")
 
-        if not os.path.exists(data_file):
-            print(f"Error: Data file for station {station_id} not found at {data_file}")
-            return None
-        
-        with open(data_file, 'r') as file:
-            for line in file:
-                line = line.strip()
-                if line.startswith('#'):
-                    year = int(line[13:17])
-                    month = int(line[18:20])
-                    day = int(line[21:23])
-                    hour = int(line[24:26])
-                    availability.append([year, month, day, hour])
-                else:
-                    continue
+            if not os.path.exists(data_file):
+                print(f"Error: Data file for station {station_id} not found at {data_file}")
+                return None
+            
+            with open(data_file, 'r') as file:
+                for line in file:
+                    line = line.strip()
+                    if line.startswith('#'):
+                        year = int(line[13:17])
+                        month = int(line[18:20])
+                        day = int(line[21:23])
+                        hour = int(line[24:26])
+                        availability.append([year, month, day, hour])
                     
         return availability
-                        
+                    
     except Exception as e:
         print(f"Error fetching availability for station {station_id}: {e}")
         return None
@@ -515,19 +513,99 @@ def availability(station_id):
 
 @app.route('/export/<station_id>')
 def export_station(station_id):
-    output_file = netcdf_app(station_id, download=True)
-    if output_file:
-        return jsonify({"status": "success", "message": f"NetCDF file created: {output_file}"})
-    else:
-        return jsonify({"status": "error", "message": "Failed to create NetCDF file"}), 500
+    # Create a temporary directory for processing
+    temp_dir = os.path.join(os.getcwd(), 'temp', str(datetime.now().timestamp()))
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+    
+    try:
+        output_file = netcdf_app(station_id, download=True, download_dir=temp_dir)
+        if output_file:
+            # For AJAX requests, return JSON
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # Return a JSON response with file URL
+                file_url = f"/download/{os.path.basename(temp_dir)}/{os.path.basename(output_file)}"
+                return jsonify({"status": "success", "message": "NetCDF file created successfully", "file_url": file_url})
+            else:
+                # For direct browser requests, send the file
+                response = send_file(output_file, 
+                                    as_attachment=True,
+                                    download_name=f"{station_id}-full.nc",
+                                    mimetype='application/x-netcdf')
+                
+                # Clean up will happen after the response is sent
+                @response.call_on_close
+                def cleanup():
+                    if os.path.exists(temp_dir):
+                        shutil.rmtree(temp_dir)
+                
+                return response
+        else:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+            return jsonify({"status": "error", "message": "Failed to create NetCDF file"}), 500
+    except Exception as e:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
+
+@app.route('/download/<temp_folder>/<filename>')
+def download_file(temp_folder, filename):
+    temp_dir = os.path.join(os.getcwd(), 'temp', temp_folder)
+    try:
+        response = send_file(os.path.join(temp_dir, filename), 
+                            as_attachment=True,
+                            download_name=filename,
+                            mimetype='application/x-netcdf')
+        
+        @response.call_on_close
+        def cleanup():
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+        
+        return response
+    except Exception as e:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        return jsonify({"status": "error", "message": f"Error downloading file: {str(e)}"}), 500
     
 @app.route('/export_main/<station_id>')
 def export_station_main(station_id):
-    output_file = netcdf_app(station_id, download=True, main=True)
-    if output_file:
-        return jsonify({"status": "success", "message": f"NetCDF file created: {output_file}"})
-    else:
-        return jsonify({"status": "error", "message": "Failed to create NetCDF file"}), 500
+    # Create a temporary directory for processing
+    temp_dir = os.path.join(os.getcwd(), 'temp', str(datetime.now().timestamp()))
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+    
+    try:
+        output_file = netcdf_app(station_id, download=True, download_dir=temp_dir, main=True)
+        if output_file:
+            # For AJAX requests, return JSON
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                # Return a JSON response with file URL
+                file_url = f"/download/{os.path.basename(temp_dir)}/{os.path.basename(output_file)}"
+                return jsonify({"status": "success", "message": "NetCDF file created successfully", "file_url": file_url})
+            else:
+                # For direct browser requests, send the file
+                response = send_file(output_file, 
+                                    as_attachment=True,
+                                    download_name=f"{station_id}-main.nc",
+                                    mimetype='application/x-netcdf')
+                
+                # Clean up will happen after the response is sent
+                @response.call_on_close
+                def cleanup():
+                    if os.path.exists(temp_dir):
+                        shutil.rmtree(temp_dir)
+                
+                return response
+        else:
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+            return jsonify({"status": "error", "message": "Failed to create NetCDF file"}), 500
+    except Exception as e:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

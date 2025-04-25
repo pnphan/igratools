@@ -652,17 +652,40 @@
       statusContainer.innerHTML = `<div>Processing request for station ${stationId}...</div>`;
       
       // Make AJAX request to get the JSON response
-      fetch(`export/${stationId}`)
+      fetch(`export/${stationId}`, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
         .then(response => response.json())
         .then(data => {
-          // Display the status and message
-          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
-          statusContainer.innerHTML = `
-            <div class="${messageClass}">
-              <strong>Status:</strong> ${data.status}<br>
-              <strong>Message:</strong> ${data.message}
-            </div>
-          `;
+          if (data.status === 'success' && data.file_url) {
+            // Show success message first
+            statusContainer.innerHTML = `
+              <div class="success-message">
+                <strong>Status:</strong> ${data.status}<br>
+                <strong>Message:</strong> ${data.message}
+              </div>
+            `;
+            
+            // Create a hidden iframe for downloading
+            const downloadFrame = document.createElement('iframe');
+            downloadFrame.style.display = 'none';
+            downloadFrame.src = data.file_url;
+            document.body.appendChild(downloadFrame);
+            
+            // Remove the iframe after a delay
+            setTimeout(() => {
+              document.body.removeChild(downloadFrame);
+            }, 5000);
+          } else {
+            statusContainer.innerHTML = `
+              <div class="error-message">
+                <strong>Status:</strong> ${data.status}<br>
+                <strong>Message:</strong> ${data.message}
+              </div>
+            `;
+          }
         })
         .catch(error => {
           // Handle any errors
@@ -684,17 +707,40 @@
       statusContainer.innerHTML = `<div>Processing request for station ${stationId}...</div>`;
       
       // Make AJAX request to get the JSON response
-      fetch(`export_main/${stationId}`)
+      fetch(`export_main/${stationId}`, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      })
         .then(response => response.json())
         .then(data => {
-          // Display the status and message
-          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
-          statusContainer.innerHTML = `
-            <div class="${messageClass}">
-              <strong>Status:</strong> ${data.status}<br>
-              <strong>Message:</strong> ${data.message}
-            </div>
-          `;
+          if (data.status === 'success' && data.file_url) {
+            // Show success message first
+            statusContainer.innerHTML = `
+              <div class="success-message">
+                <strong>Status:</strong> ${data.status}<br>
+                <strong>Message:</strong> ${data.message}
+              </div>
+            `;
+            
+            // Create a hidden iframe for downloading
+            const downloadFrame = document.createElement('iframe');
+            downloadFrame.style.display = 'none';
+            downloadFrame.src = data.file_url;
+            document.body.appendChild(downloadFrame);
+            
+            // Remove the iframe after a delay
+            setTimeout(() => {
+              document.body.removeChild(downloadFrame);
+            }, 5000);
+          } else {
+            statusContainer.innerHTML = `
+              <div class="error-message">
+                <strong>Status:</strong> ${data.status}<br>
+                <strong>Message:</strong> ${data.message}
+              </div>
+            `;
+          }
         })
         .catch(error => {
           // Handle any errors
@@ -807,6 +853,7 @@
       statusContainer.innerHTML = `<div>Processing batch export for ${selectedStations.length} stations...</div>`;
       
       let results = [];
+      let processedCount = 0;
       
       // Process each station sequentially
       for (let i = 0; i < selectedStations.length; i++) {
@@ -814,31 +861,62 @@
         
         statusContainer.innerHTML += `<div>Processing station ${i+1}/${selectedStations.length}: ${station.id} (${station.name})...</div>`;
         
-        fetch(`export/${station.id}`)
+        fetch(`export/${station.id}`, {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
         .then(response => response.json())
         .then(data => {
-          // Display the status and message
-          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
-          statusContainer.innerHTML = `
-            <div class="${messageClass}">
-              <strong>Status:</strong> ${data.status}<br>
-              <strong>Message:</strong> ${data.message}
-            </div>
-          `;
+          processedCount++;
+          
+          if (data.status === 'success' && data.file_url) {
+            // Create a hidden iframe for downloading
+            const downloadFrame = document.createElement('iframe');
+            downloadFrame.style.display = 'none';
+            downloadFrame.src = data.file_url;
+            document.body.appendChild(downloadFrame);
+            
+            // Remove the iframe after a delay
+            setTimeout(() => {
+              document.body.removeChild(downloadFrame);
+            }, 5000);
+            
+            results.push({
+              id: station.id,
+              name: station.name,
+              status: data.status,
+              message: data.message
+            });
+          } else {
+            results.push({
+              id: station.id,
+              name: station.name,
+              status: data.status,
+              message: data.message
+            });
+          }
+          
+          // Update results display after each station is processed
+          updateBatchResults(statusContainer, results, processedCount, selectedStations.length);
         })
         .catch(error => {
-          // Handle any errors
-          statusContainer.innerHTML = `
-            <div class="error-message">
-              <strong>Error:</strong> Failed to process request.<br>
-              <strong>Details:</strong> ${error.message}
-            </div>
-          `;
+          processedCount++;
+          results.push({
+            id: station.id,
+            name: station.name,
+            status: 'error',
+            message: error.message
+          });
+          
+          // Update results display after each station is processed
+          updateBatchResults(statusContainer, results, processedCount, selectedStations.length);
         });
       }
-      
-      // Display results
-      let resultsHtml = '<div><strong>Batch Export Results:</strong></div>';
+    }
+    
+    function updateBatchResults(statusContainer, results, processedCount, totalCount) {
+      let resultsHtml = `<div><strong>Batch Export Results (${processedCount}/${totalCount}):</strong></div>`;
       results.forEach(result => {
         const messageClass = result.status === 'success' ? 'success-message' : 'error-message';
         resultsHtml += `
@@ -870,6 +948,7 @@
       statusContainer.innerHTML = `<div>Processing batch export (main) for ${selectedStations.length} stations...</div>`;
       
       let results = [];
+      let processedCount = 0;
       
       // Process each station sequentially
       for (let i = 0; i < selectedStations.length; i++) {
@@ -877,31 +956,62 @@
         
         statusContainer.innerHTML += `<div>Processing station ${i+1}/${selectedStations.length}: ${station.id} (${station.name})...</div>`;
         
-        fetch(`export_main/${station.id}`)
+        fetch(`export_main/${station.id}`, {
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        })
         .then(response => response.json())
         .then(data => {
-          // Display the status and message
-          const messageClass = data.status === 'success' ? 'success-message' : 'error-message';
-          statusContainer.innerHTML = `
-            <div class="${messageClass}">
-              <strong>Status:</strong> ${data.status}<br>
-              <strong>Message:</strong> ${data.message}
-            </div>
-          `;
+          processedCount++;
+          
+          if (data.status === 'success' && data.file_url) {
+            // Create a hidden iframe for downloading
+            const downloadFrame = document.createElement('iframe');
+            downloadFrame.style.display = 'none';
+            downloadFrame.src = data.file_url;
+            document.body.appendChild(downloadFrame);
+            
+            // Remove the iframe after a delay
+            setTimeout(() => {
+              document.body.removeChild(downloadFrame);
+            }, 5000);
+            
+            results.push({
+              id: station.id,
+              name: station.name,
+              status: data.status,
+              message: data.message
+            });
+          } else {
+            results.push({
+              id: station.id,
+              name: station.name,
+              status: data.status,
+              message: data.message
+            });
+          }
+          
+          // Update results display after each station is processed
+          updateBatchResultsMain(statusContainer, results, processedCount, selectedStations.length);
         })
         .catch(error => {
-          // Handle any errors
-          statusContainer.innerHTML = `
-            <div class="error-message">
-              <strong>Error:</strong> Failed to process request.<br>
-              <strong>Details:</strong> ${error.message}
-            </div>
-          `;
+          processedCount++;
+          results.push({
+            id: station.id,
+            name: station.name,
+            status: 'error',
+            message: error.message
+          });
+          
+          // Update results display after each station is processed
+          updateBatchResultsMain(statusContainer, results, processedCount, selectedStations.length);
         });
       }
-      
-      // Display results
-      let resultsHtml = '<div><strong>Batch Export Results (Main):</strong></div>';
+    }
+    
+    function updateBatchResultsMain(statusContainer, results, processedCount, totalCount) {
+      let resultsHtml = `<div><strong>Batch Export Results (Main) (${processedCount}/${totalCount}):</strong></div>`;
       results.forEach(result => {
         const messageClass = result.status === 'success' ? 'success-message' : 'error-message';
         resultsHtml += `
@@ -911,7 +1021,6 @@
         `;
       });
       
-      // Display results
       statusContainer.innerHTML = resultsHtml;
     }
     
